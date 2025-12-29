@@ -12,7 +12,12 @@
     ],
     "androidCxxLibName": "NitroMetamask"
   },
-  "autolinking": {},
+  "autolinking": {
+    "MetamaskConnector": {
+      "swift": "HybridMetamaskConnector",
+      "kotlin": "HybridMetamaskConnector"
+    }
+  },
   "ignorePaths": [
     "**/node_modules"
   ]

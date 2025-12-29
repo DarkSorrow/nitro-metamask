@@ -137,5 +137,8 @@ dependencies {
 
   // Add a dependency on NitroModules
   implementation project(":react-native-nitro-modules")
+
+  // MetaMask Android SDK
+  implementation "io.metamask.android:sdk:1.0.0"
 }
 
