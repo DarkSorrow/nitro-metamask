@@ -27,6 +27,6 @@ Pod::Spec.new do |s|
 
   s.dependency 'React-jsi'
   s.dependency 'React-callinvoker'
-  s.dependency 'MetaMaskIOSSDK'
+  s.dependency 'metamask-ios-sdk', '~> 0.8.10'
   install_modules_dependencies(s)
 end

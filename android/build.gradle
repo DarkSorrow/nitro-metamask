@@ -126,6 +126,7 @@ android {
 repositories {
   mavenCentral()
   google()
+  maven { url "https://jitpack.io" }
 }
 
 
@@ -139,6 +140,8 @@ dependencies {
   implementation project(":react-native-nitro-modules")
 
   // MetaMask Android SDK
-  implementation "io.metamask.android:sdk:1.0.0"
+  // See: https://github.com/MetaMask/metamask-android-sdk
+  // Available on Maven Central: https://mvnrepository.com/artifact/io.metamask.androidsdk/metamask-android-sdk
+  implementation "io.metamask.androidsdk:metamask-android-sdk:0.6.6"
 }
 
