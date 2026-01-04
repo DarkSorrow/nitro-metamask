@@ -1,0 +1,104 @@
+name: CI and Publish
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Type Check
+        run: npm run typecheck
+
+      - name: Build Package
+        run: npm run typescript
+
+      - name: Verify Build Output
+        run: |
+          echo "Verifying build output..."
+          if [ ! -d "lib" ]; then
+            echo "❌ lib directory not found!"
+            exit 1
+          fi
+          
+          if [ ! -f "lib/index.js" ]; then
+            echo "❌ Module build failed! lib/index.js not found"
+            exit 1
+          fi
+          
+          if [ ! -f "lib/index.d.ts" ]; then
+            echo "❌ TypeScript build failed! lib/index.d.ts not found"
+            exit 1
+          fi
+          
+          if [ ! -d "nitrogen" ]; then
+            echo "❌ nitrogen directory not found!"
+            exit 1
+          fi
+          
+          echo "✅ Build verification passed"
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: package-artifacts
+          path: .
+          retention-days: 1
+
+  publish:
+    name: Publish to NPM
+    if: github.event_name == 'release' && github.event.action == 'published'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: package-artifacts
+          path: .
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Update Version
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix
+          echo "Publishing version: $VERSION"
+          
+          # Update package.json version directly
+          node -e "
+            const pkg = require('./package.json');
+            pkg.version = '$VERSION';
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          
+          echo "✅ Version updated to $VERSION"
+
+      - name: Publish to NPM
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

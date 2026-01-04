@@ -73,6 +73,8 @@ export async function connectWallet() {
 
 For social login authentication, follow this pattern:
 
+**⚠️ Note**: The endpoints shown below (`/social/.well-generated` and `/social/authenticate`) are **example endpoints that you must implement on your backend**. See the [Required Backend Implementation](#required-backend-implementation) section below for details.
+
 ```ts
 import { metamaskConnector } from 'react-native-metamask-nitro'
 
@@ -81,7 +83,7 @@ export async function authenticateWithMetaMask() {
     // Step 1: Connect to MetaMask wallet
     const { address, chainId } = await metamaskConnector.connect()
     
-    // Step 2: Fetch nonce from your backend
+    // Step 2: Fetch nonce from your backend (YOU MUST IMPLEMENT THIS ENDPOINT)
     const nonceResponse = await fetch('/social/.well-generated', {
       method: 'PATCH',
       credentials: 'include',
@@ -99,7 +101,7 @@ export async function authenticateWithMetaMask() {
     // Step 4: Sign the message with MetaMask
     const signature = await metamaskConnector.signMessage(message)
     
-    // Step 5: Submit signature to your backend for authentication
+    // Step 5: Submit signature to your backend for authentication (YOU MUST IMPLEMENT THIS ENDPOINT)
     await fetch('/social/authenticate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -145,6 +147,103 @@ This flow ensures that:
 - Nonces prevent replay attacks
 - Expiration timestamps limit signature validity
 
+## Required Backend Implementation
+
+**⚠️ Important**: The authentication flow shown above requires you to implement two backend endpoints. This module only handles the client-side MetaMask connection and message signing—you must build the server-side verification and session management.
+
+### Endpoint 1: Nonce Generation (`POST /social/nonce-generated`)
+
+This endpoint should:
+- Generate a unique, cryptographically secure nonce for each authentication attempt
+- Return the nonce as plain text
+- Optionally associate the nonce with a session or temporary storage
+- Set an expiration time for the nonce (recommended: 5-10 minutes)
+
+**Example Implementation:**
+```typescript
+// Backend endpoint example
+app.post('/social/nonce-generated', (req, res) => {
+  const nonce = generateSecureNonce() // e.g., crypto.randomBytes(32).toString('hex')
+  // Store nonce with expiration (e.g., in Redis or database)
+  storeNonce(nonce, { expiresIn: '5m' })
+  res.send(nonce)
+})
+```
+
+### Endpoint 2: Signature Verification (`POST /social/authenticate`)
+
+This endpoint should:
+- Receive the message, signature, address, and chainId from the client
+- **Verify the signature** cryptographically using the wallet address and message
+- Validate the nonce (check it exists, hasn't been used, and hasn't expired)
+- Validate the expiration timestamp in the message
+- Create a user session or authentication token upon successful verification
+- Mark the nonce as used to prevent replay attacks
+
+**Example Implementation:**
+```typescript
+// Backend endpoint example
+app.post('/social/authenticate', async (req, res) => {
+  const { message, signature, address, chainId } = req.body
+  
+  // 1. Parse and validate message
+  const messageData = JSON.parse(message)
+  if (Date.now() > messageData.exp) {
+    return res.status(401).json({ error: 'Message expired' })
+  }
+  
+  // 2. Verify nonce
+  if (!await isValidNonce(messageData.nonce)) {
+    return res.status(401).json({ error: 'Invalid or expired nonce' })
+  }
+  
+  // 3. Verify signature cryptographically
+  const isValid = await verifySignature(message, signature, address)
+  if (!isValid) {
+    return res.status(401).json({ error: 'Invalid signature' })
+  }
+  
+  // 4. Mark nonce as used
+  await markNonceAsUsed(messageData.nonce)
+  
+  // 5. Create session/token
+  const sessionToken = createSession({ address, chainId })
+  
+  res.json({ token: sessionToken, address, chainId })
+})
+```
+
+### Signature Verification
+
+You'll need to implement cryptographic signature verification. The signature is created using Ethereum's `personal_sign` standard. Use a library like:
+- **Node.js**: `ethers.js` or `web3.js`
+- **Python**: `eth-account` or `web3.py`
+- **Other languages**: Use appropriate Ethereum signature verification libraries
+
+**Example with ethers.js:**
+```typescript
+import { ethers } from 'ethers'
+
+async function verifySignature(message: string, signature: string, address: string): Promise<boolean> {
+  try {
+    const recoveredAddress = ethers.utils.verifyMessage(message, signature)
+    return recoveredAddress.toLowerCase() === address.toLowerCase()
+  } catch {
+    return false
+  }
+}
+```
+
+### Security Requirements
+
+Your backend implementation must:
+- ✅ **Always verify signatures server-side** - Never trust client-provided authentication without cryptographic verification
+- ✅ **Validate nonces** - Ensure each nonce is used only once and within its expiration window
+- ✅ **Check message expiration** - Reject expired authentication messages
+- ✅ **Use HTTPS** - All endpoints must use TLS/SSL
+- ✅ **Rate limiting** - Implement rate limiting to prevent abuse
+- ✅ **Secure session management** - Use secure, httpOnly cookies or signed tokens for sessions
+
 ## Security Considerations
 
 - All cryptographic operations are performed natively through official MetaMask SDKs
@@ -153,3 +252,11 @@ This flow ensures that:
 - Always validate signatures server-side before creating sessions
 - Use HTTPS for all network requests
 - Implement proper nonce management and expiration handling
+
+## About
+
+This module is actively used in the mobile app of [Novastera.com](https://novastera.com), ensuring reliability and real-world production environments. Novastera is a CRM/ERP system that supports cryptocurrency transactions and Web3 authentication.
+
+## License
+
+Apache License - see [LICENSE](LICENSE) file for details.
