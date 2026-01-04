@@ -27,6 +27,9 @@ jobs:
       - name: Type Check
         run: npm run typecheck
 
+      - name: Generate Nitrogen Bindings
+        run: npx nitrogen
+
       - name: Build Package
         run: npm run typescript
 
