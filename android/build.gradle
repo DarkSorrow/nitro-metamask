@@ -139,6 +139,10 @@ dependencies {
   // Add a dependency on NitroModules
   implementation project(":react-native-nitro-modules")
 
+  // Kotlin Coroutines for suspendCancellableCoroutine support
+  // Required for Promise.async with coroutines in Nitro modules
+  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2"
+
   // MetaMask Android SDK
   // See: https://github.com/MetaMask/metamask-android-sdk
   // Available on Maven Central: https://mvnrepository.com/artifact/io.metamask.androidsdk/metamask-android-sdk
