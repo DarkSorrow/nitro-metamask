@@ -1,7 +1,7 @@
 package com.margelo.nitro.nitrometamask
 
 import com.margelo.nitro.core.Promise
-import com.margelo.nitro.core.NitroRuntime
+import com.margelo.nitro.modules.NitroModulesContextHolder
 import io.metamask.androidsdk.Ethereum
 import io.metamask.androidsdk.Result
 import io.metamask.androidsdk.DappMetadata
@@ -14,10 +14,10 @@ import kotlin.coroutines.resume
 class HybridMetamaskConnector : HybridMetamaskConnectorSpec() {
     // Initialize Ethereum SDK with Context, DappMetadata, and SDKOptions
     // Based on: https://github.com/MetaMask/metamask-android-sdk
-    // Using NitroRuntime for proper Nitro context access (survives reloads, no static leaks)
+    // Using NitroModulesContextHolder for proper Nitro context access (survives reloads, no static leaks)
     private val ethereum: Ethereum by lazy {
-        val context = NitroRuntime.applicationContext
-            ?: throw IllegalStateException("Nitro application context not available")
+        val context = NitroModulesContextHolder.getApplicationContext()
+            ?: throw IllegalStateException("Application context not available")
         
         val dappMetadata = DappMetadata(
             name = "Nitro MetaMask Connector",
@@ -56,12 +56,14 @@ class HybridMetamaskConnector : HybridMetamaskConnectorSpec() {
                         ?: throw IllegalStateException("MetaMask SDK returned no chainId after connection")
                     
                     // Parse chainId from hex string (e.g., "0x1") or decimal string to number
+                    // Nitro requires chainId to be Double (number in TS maps to Double in Kotlin)
                     val chainId = try {
-                        if (chainIdString.startsWith("0x") || chainIdString.startsWith("0X")) {
+                        val chainIdInt = if (chainIdString.startsWith("0x") || chainIdString.startsWith("0X")) {
                             chainIdString.substring(2).toLong(16).toInt()
                         } else {
                             chainIdString.toLong().toInt()
                         }
+                        chainIdInt.toDouble()
                     } catch (e: NumberFormatException) {
                         throw IllegalStateException("Invalid chainId format: $chainIdString")
                     }
