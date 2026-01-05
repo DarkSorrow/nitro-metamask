@@ -1,53 +1,52 @@
 import Foundation
 import MetaMaskSDK
+import NitroModules
 
 class HybridMetamaskConnector: HybridMetamaskConnectorSpec {
   private let sdk = MetaMaskSDK.shared
 
-  func connect() async throws -> ConnectResult {
-    // Based on MetaMask iOS SDK docs: let connectResult = await metamaskSDK.connect()
-    let connectResult = await sdk.connect()
-    
-    switch connectResult {
-    case .success(let value):
-      // After successful connection, get account info from SDK
-      guard let account = sdk.account else {
-        throw NSError(domain: "MetamaskConnector", code: -1, userInfo: [NSLocalizedDescriptionKey: "MetaMask SDK returned no account"])
+  func connect() -> Promise<ConnectResult> {
+    // Use Promise.async with Swift async/await for best practice in Nitro modules
+    // Reference: https://nitro.margelo.com/docs/types/promises
+    return Promise.async {
+      // Based on MetaMask iOS SDK docs: let connectResult = await metamaskSDK.connect()
+      // Reference: https://github.com/MetaMask/metamask-ios-sdk
+      let connectResult = try await self.sdk.connect()
+      
+      switch connectResult {
+      case .success(let value):
+        // After successful connection, get account info from SDK
+        // Note: sdk.account is a String (address), not an object
+        // Reference: https://raw.githubusercontent.com/MetaMask/metamask-ios-sdk/924d91bb3e98a5383c3082d6d5ba3ddac9e1c565/README.md
+        guard let address = self.sdk.account, !address.isEmpty else {
+          throw NSError(domain: "MetamaskConnector", code: -1, userInfo: [NSLocalizedDescriptionKey: "MetaMask SDK returned no address after connection"])
+        }
+        guard let chainId = self.sdk.chainId, !chainId.isEmpty else {
+          throw NSError(domain: "MetamaskConnector", code: -1, userInfo: [NSLocalizedDescriptionKey: "MetaMask SDK returned no chainId after connection"])
+        }
+        return ConnectResult(address: address, chainId: chainId)
+      case .failure(let error):
+        throw error
       }
-      return ConnectResult(address: account.address, chainId: "\(account.chainId)")
-    case .failure(let error):
-      throw error
     }
   }
 
-  func signMessage(message: String) async throws -> String {
-    // Get the connected account address
-    guard let account = sdk.account else {
-      throw NSError(domain: "MetamaskConnector", code: -1, userInfo: [NSLocalizedDescriptionKey: "No connected account. Call connect() first."])
-    }
-    
-    // Based on MetaMask iOS SDK docs, personal_sign params are: [account, message]
-    // The SDK handles message encoding internally
-    // Reference: https://github.com/MetaMask/metamask-ios-sdk
-    let params: [String] = [account.address, message]
-    
-    // Create EthereumRequest for personal_sign JSON-RPC method
-    let request = EthereumRequest(
-      method: .personalSign,
-      params: params
-    )
-    
-    // Make the request using the SDK's async request method
-    let result = try await sdk.request(request)
-    
-    // Extract signature from response
-    // The signature should be a hex-encoded string (0x-prefixed)
-    if let signature = result as? String {
-      return signature
-    } else if let dict = result as? [String: Any], let sig = dict["signature"] as? String ?? dict["result"] as? String {
-      return sig
-    } else {
-      throw NSError(domain: "MetamaskConnector", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid signature response format"])
+  func signMessage(message: String) -> Promise<String> {
+    // Use Promise.async with Swift async/await for best practice in Nitro modules
+    // Reference: https://nitro.margelo.com/docs/types/promises
+    return Promise.async {
+      // Use the convenience method connectAndSign() which connects and signs in one call
+      // This is equivalent to Android's connectSign() method
+      // Reference: https://raw.githubusercontent.com/MetaMask/metamask-ios-sdk/924d91bb3e98a5383c3082d6d5ba3ddac9e1c565/README.md
+      // Example: https://raw.githubusercontent.com/MetaMask/metamask-ios-sdk/924d91bb3e98a5383c3082d6d5ba3ddac9e1c565/Example/metamask-ios-sdk/SignView.swift
+      let connectSignResult = try await self.sdk.connectAndSign(message: message)
+      
+      switch connectSignResult {
+      case .success(let signature):
+        return signature
+      case .failure(let error):
+        throw error
+      }
     }
   }
 }
