@@ -1,7 +1,6 @@
 package com.margelo.nitro.nitrometamask
 
 import com.margelo.nitro.core.Promise
-import com.margelo.nitro.modules.NitroModulesContextHolder
 import io.metamask.androidsdk.Ethereum
 import io.metamask.androidsdk.Result
 import io.metamask.androidsdk.DappMetadata
@@ -14,10 +13,10 @@ import kotlin.coroutines.resume
 class HybridMetamaskConnector : HybridMetamaskConnectorSpec() {
     // Initialize Ethereum SDK with Context, DappMetadata, and SDKOptions
     // Based on: https://github.com/MetaMask/metamask-android-sdk
-    // Using NitroModulesContextHolder for proper Nitro context access (survives reloads, no static leaks)
+    // Using MetamaskContextHolder for Context access (Nitro doesn't provide Context APIs)
+    // This pattern matches how other Nitro modules handle Context (VisionCamera, MMKV, etc.)
     private val ethereum: Ethereum by lazy {
-        val context = NitroModulesContextHolder.getApplicationContext()
-            ?: throw IllegalStateException("Application context not available")
+        val context = MetamaskContextHolder.get()
         
         val dappMetadata = DappMetadata(
             name = "Nitro MetaMask Connector",
