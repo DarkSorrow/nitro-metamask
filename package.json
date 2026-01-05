@@ -1,20 +1,33 @@
 {
   "name": "@novastera-oss/nitro-metamask",
-  "version": "0.1.3",
-  "description": "nitro-metamask",
-  "main": "lib/index",
-  "module": "lib/index",
-  "types": "lib/index.d.ts",
+  "version": "0.1.0",
+  "description": "Novastera authentication with native mobile libraries",
+  "main": "./lib/commonjs/index.js",
+  "module": "./lib/module/index.js",
+  "types": "./lib/typescript/src/index.d.ts",
   "react-native": "src/index",
   "source": "src/index",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "clean": "git clean -dfX",
+    "release": "semantic-release",
+    "build": "npm run typecheck && bob build",
+    "codegen": "nitrogen --logLevel=\"debug\" && npm run build && node post-script.js"
+  },
+  "keywords": [
+    "react-native",
+    "@novastera-oss/nitro-metamask"
+  ],
   "files": [
     "src",
     "react-native.config.js",
     "lib",
     "nitrogen",
+    "cpp",
+    "nitro.json",
     "android/build.gradle",
-    "android/gradle.properties",
     "android/fix-prefab.gradle",
+    "android/gradle.properties",
     "android/CMakeLists.txt",
     "android/src",
     "ios/**/*.h",
@@ -23,53 +36,40 @@
     "ios/**/*.cpp",
     "ios/**/*.swift",
     "app.plugin.js",
-    "nitro.json",
     "*.podspec",
     "README.md"
   ],
-  "scripts": {
-    "postinstall": "tsc || exit 0;",
-    "typecheck": "tsc --noEmit",
-    "clean": "rm -rf android/build node_modules/**/android/build lib",
-    "lint": "eslint \"**/*.{js,ts,tsx}\" --fix",
-    "lint-ci": "eslint \"**/*.{js,ts,tsx}\" -f @jamesacarr/github-actions",
-    "typescript": "tsc",
-    "specs": "tsc --noEmit false && nitrogen --logLevel=\"debug\""
-  },
-  "keywords": [
-    "react-native",
-    "nitro"
+  "workspaces": [
+    "example"
   ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/novastera/nitro-metamask"
-  },
-  "author": "Novastera <hassan@novastera.com>",
+  "repository": "https://github.com/darksorrow/@novastera-oss/nitro-metamask.git",
+  "author": "DarkSorrow",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/novastera/nitro-metamask/issues"
-  },
-  "homepage": "https://novastera.com",
+  "bugs": "https://github.com/darksorrow/@novastera-oss/nitro-metamask/issues",
+  "homepage": "https://github.com/darksorrow/@novastera-oss/nitro-metamask#readme",
   "publishConfig": {
+    "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
-    "@react-native/eslint-config": "0.82.0",
-    "@types/react": "^19.1.03",
-    "eslint": "^9.39.0",
-    "eslint-config-prettier": "^10.1.0",
-    "eslint-plugin-prettier": "^5.2.1",
-    "nitrogen": "^0.32.0",
-    "prettier": "^3.3.3",
-    "react": "19.1.1",
-    "react-native": "0.82.0",
-    "react-native-nitro-modules": "^0.32.0",
+    "@jamesacarr/eslint-formatter-github-actions": "^0.2.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@types/jest": "^29.5.12",
+    "@types/react": "19.2.0",
+    "nitrogen": "0.32.0",
+    "react": "19.2.0",
+    "react-native": "0.83",
+    "react-native-builder-bob": "^0.40.17",
+    "react-native-nitro-modules": "0.32.0",
+    "conventional-changelog-conventionalcommits": "^9.1.0",
+    "semantic-release": "^25.0.2",
     "typescript": "^5.8.3"
   },
   "peerDependencies": {
     "react": "*",
     "react-native": "*",
-    "react-native-nitro-modules": "^0.32.0"
+    "react-native-nitro-modules": "*"
   },
   "eslintConfig": {
     "root": true,
@@ -104,5 +104,19 @@
     "trailingComma": "es5",
     "useTabs": false,
     "semi": false
+  },
+  "react-native-builder-bob": {
+    "source": "src",
+    "output": "lib",
+    "targets": [
+      "commonjs",
+      "module",
+      [
+        "typescript",
+        {
+          "project": "tsconfig.json"
+        }
+      ]
+    ]
   }
 }

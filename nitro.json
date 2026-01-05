@@ -13,9 +13,9 @@
     "androidCxxLibName": "NitroMetamask"
   },
   "autolinking": {
-    "MetamaskConnector": {
-      "swift": "HybridMetamaskConnector",
-      "kotlin": "HybridMetamaskConnector"
+    "NitroMetamask": {
+      "swift": "HybridNitroMetamask",
+      "kotlin": "HybridNitroMetamask"
     }
   },
   "ignorePaths": [

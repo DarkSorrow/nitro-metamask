@@ -5,7 +5,7 @@ buildscript {
   }
 
   dependencies {
-    classpath "com.android.tools.build:gradle:8.13.0"
+    classpath "com.android.tools.build:gradle:8.8.0"
   }
 }
 
@@ -36,7 +36,7 @@ def getExtOrIntegerDefault(name) {
 }
 
 android {
-  namespace "com.margelo.nitro.nitrometamask"
+  namespace "com.nitrometamask"
 
   ndkVersion getExtOrDefault("ndkVersion")
   compileSdkVersion getExtOrIntegerDefault("compileSdkVersion")
@@ -72,22 +72,22 @@ android {
 
   packagingOptions {
     excludes = [
-            "META-INF",
-            "META-INF/**",
-            "**/libc++_shared.so",
-            "**/libfbjni.so",
-            "**/libjsi.so",
-            "**/libfolly_json.so",
-            "**/libfolly_runtime.so",
-            "**/libglog.so",
-            "**/libhermes.so",
-            "**/libhermes-executor-debug.so",
-            "**/libhermes_executor.so",
-            "**/libreactnative.so",
-            "**/libreactnativejni.so",
-            "**/libturbomodulejsijni.so",
-            "**/libreact_nativemodule_core.so",
-            "**/libjscexecutor.so"
+        "META-INF",
+        "META-INF/**",
+        "**/libc++_shared.so",
+        "**/libfbjni.so",
+        "**/libjsi.so",
+        "**/libfolly_json.so",
+        "**/libfolly_runtime.so",
+        "**/libglog.so",
+        "**/libhermes.so",
+        "**/libhermes-executor-debug.so",
+        "**/libhermes_executor.so",
+        "**/libreactnative.so",
+        "**/libreactnativejni.so",
+        "**/libturbomodulejsijni.so",
+        "**/libreact_nativemodule_core.so",
+        "**/libjscexecutor.so"
     ]
   }
 
@@ -126,7 +126,6 @@ android {
 repositories {
   mavenCentral()
   google()
-  maven { url "https://jitpack.io" }
 }
 
 
@@ -149,3 +148,10 @@ dependencies {
   implementation "io.metamask.androidsdk:metamask-android-sdk:0.6.6"
 }
 
+if (isNewArchitectureEnabled()) {
+  react {
+    jsRootDir = file("../src/")
+    libraryName = "NitroMetamask"
+    codegenJavaPackageName = "com.nitrometamask"
+  }
+}

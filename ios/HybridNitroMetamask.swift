@@ -2,7 +2,7 @@ import NitroModules
 import MetaMaskSDK
 import Foundation
 
-final class HybridMetamaskConnector: HybridMetamaskConnectorSpec {
+final class HybridNitroMetamask: HybridNitroMetamaskSpec {
   private let sdk = MetaMaskSDK.shared
 
   func connect() -> Promise<ConnectResult> {
@@ -94,4 +94,3 @@ final class HybridMetamaskConnector: HybridMetamaskConnectorSpec {
     }
   }
 }
-

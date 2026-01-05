@@ -1,8 +1,8 @@
 //
 //  Bridge.h
-//  NitroMetamask
+//  nitro-metamask
 //
-//  Created by Marc Rousavy on 22.07.24.
+//  Created by DarkSorrow on 05/01/2026
 //
 
 #pragma once
