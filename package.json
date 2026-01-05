@@ -1,7 +1,7 @@
 {
   "name": "@novastera-oss/nitro-metamask",
   "version": "0.1.0",
-  "description": "Novastera authentication with native mobile libraries",
+  "description": "Novastera metamask authentication with native mobile libraries",
   "main": "./lib/commonjs/index.js",
   "module": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
@@ -16,7 +16,9 @@
   },
   "keywords": [
     "react-native",
-    "@novastera-oss/nitro-metamask"
+    "@novastera-oss/nitro-metamask",
+    "metamask",
+    "novastera"
   ],
   "files": [
     "src",

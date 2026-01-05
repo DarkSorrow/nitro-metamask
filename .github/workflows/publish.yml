@@ -30,6 +30,23 @@ jobs:
       - name: Generate Nitrogen Bindings
         run: npx nitrogen
 
+      - name: Verify Nitrogen Generation
+        run: |
+          echo "Verifying nitrogen generation..."
+          if [ ! -d "nitrogen" ]; then
+            echo "❌ nitrogen directory not found after generation!"
+            echo "Listing current directory:"
+            ls -la
+            exit 1
+          fi
+          
+          if [ ! -d "nitrogen/generated" ]; then
+            echo "❌ nitrogen/generated directory not found!"
+            exit 1
+          fi
+          
+          echo "✅ Nitrogen generation verified"
+
       - name: Build Package
         run: npm run build
 
@@ -41,18 +58,24 @@ jobs:
             exit 1
           fi
           
-          if [ ! -f "lib/index.js" ]; then
-            echo "❌ Module build failed! lib/index.js not found"
+          if [ ! -f "lib/commonjs/index.js" ]; then
+            echo "❌ CommonJS build failed! lib/commonjs/index.js not found"
             exit 1
           fi
           
-          if [ ! -f "lib/index.d.ts" ]; then
-            echo "❌ TypeScript build failed! lib/index.d.ts not found"
+          if [ ! -f "lib/module/index.js" ]; then
+            echo "❌ ES Module build failed! lib/module/index.js not found"
             exit 1
           fi
           
+          if [ ! -f "lib/typescript/src/index.d.ts" ]; then
+            echo "❌ TypeScript build failed! lib/typescript/src/index.d.ts not found"
+            exit 1
+          fi
+          
+          # Verify nitrogen still exists after build (it should be preserved)
           if [ ! -d "nitrogen" ]; then
-            echo "❌ nitrogen directory not found!"
+            echo "❌ nitrogen directory not found after build!"
             exit 1
           fi
           
