@@ -31,7 +31,7 @@ jobs:
         run: npx nitrogen
 
       - name: Build Package
-        run: npm run typescript
+        run: npm run build
 
       - name: Verify Build Output
         run: |
