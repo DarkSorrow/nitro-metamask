@@ -2,7 +2,7 @@ import type { HybridObject } from 'react-native-nitro-modules'
 
 export interface ConnectResult {
   address: string
-  chainId: string
+  chainId: number
 }
 
 export interface MetamaskConnector

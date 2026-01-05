@@ -1,35 +1,34 @@
 package com.margelo.nitro.nitrometamask
 
-import com.margelo.nitro.Promise
+import com.margelo.nitro.core.Promise
+import com.margelo.nitro.core.NitroRuntime
 import io.metamask.androidsdk.Ethereum
 import io.metamask.androidsdk.Result
 import io.metamask.androidsdk.DappMetadata
 import io.metamask.androidsdk.SDKOptions
-import com.facebook.react.bridge.ReactApplicationContext
-import kotlinx.coroutines.suspendCoroutine
+import io.metamask.androidsdk.EthereumRequest
+import io.metamask.androidsdk.EthereumMethod
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 class HybridMetamaskConnector : HybridMetamaskConnectorSpec() {
-    companion object {
-        @Volatile
-        private var reactContext: ReactApplicationContext? = null
-        
-        fun setReactContext(context: ReactApplicationContext) {
-            reactContext = context
-        }
-    }
-    
     // Initialize Ethereum SDK with Context, DappMetadata, and SDKOptions
     // Based on: https://github.com/MetaMask/metamask-android-sdk
-    // The SDK requires a Context for initialization
+    // Using NitroRuntime for proper Nitro context access (survives reloads, no static leaks)
     private val ethereum: Ethereum by lazy {
-        val context = reactContext?.applicationContext
-            ?: throw IllegalStateException("ReactApplicationContext not initialized. Make sure NitroMetamaskPackage is properly registered.")
+        val context = NitroRuntime.applicationContext
+            ?: throw IllegalStateException("Nitro application context not available")
         
         val dappMetadata = DappMetadata(
             name = "Nitro MetaMask Connector",
             url = "https://novastera.com"
         )
-        val sdkOptions = SDKOptions()
+        // SDKOptions constructor requires infuraAPIKey and readonlyRPCMap parameters
+        // They can be null for basic usage without Infura or custom RPC
+        val sdkOptions = SDKOptions(
+            infuraAPIKey = null,
+            readonlyRPCMap = null
+        )
         
         Ethereum(context, dappMetadata, sdkOptions)
     }
@@ -38,10 +37,13 @@ class HybridMetamaskConnector : HybridMetamaskConnectorSpec() {
         // Use Promise.async with coroutines for best practice in Nitro modules
         // Reference: https://nitro.margelo.com/docs/types/promises
         return Promise.async {
-            // Convert callback-based connect() to suspend function using suspendCoroutine
-            val result = suspendCoroutine<Result> { continuation ->
+            // Convert callback-based connect() to suspend function using suspendCancellableCoroutine
+            // This handles cancellation properly when JS GC disposes the promise
+            val result = suspendCancellableCoroutine<Result> { continuation ->
                 ethereum.connect { callbackResult ->
-                    continuation.resume(callbackResult)
+                    if (continuation.isActive) {
+                        continuation.resume(callbackResult)
+                    }
                 }
             }
             
@@ -50,12 +52,23 @@ class HybridMetamaskConnector : HybridMetamaskConnectorSpec() {
                     // After successful connection, get account info from SDK
                     val address = ethereum.selectedAddress
                         ?: throw IllegalStateException("MetaMask SDK returned no address after connection")
-                    val chainId = ethereum.chainId
+                    val chainIdString = ethereum.chainId
                         ?: throw IllegalStateException("MetaMask SDK returned no chainId after connection")
+                    
+                    // Parse chainId from hex string (e.g., "0x1") or decimal string to number
+                    val chainId = try {
+                        if (chainIdString.startsWith("0x") || chainIdString.startsWith("0X")) {
+                            chainIdString.substring(2).toLong(16).toInt()
+                        } else {
+                            chainIdString.toLong().toInt()
+                        }
+                    } catch (e: NumberFormatException) {
+                        throw IllegalStateException("Invalid chainId format: $chainIdString")
+                    }
                     
                     ConnectResult(
                         address = address,
-                        chainId = chainId.toString()
+                        chainId = chainId
                     )
                 }
                 is Result.Error -> {
@@ -72,10 +85,28 @@ class HybridMetamaskConnector : HybridMetamaskConnectorSpec() {
         // Use Promise.async with coroutines for best practice in Nitro modules
         // Reference: https://nitro.margelo.com/docs/types/promises
         return Promise.async {
-            // Use the convenience method connectSign() which connects and signs in one call
-            // Based on SDK docs: ethereum.connectSign(message) returns Result synchronously
-            // Reference: https://github.com/MetaMask/metamask-android-sdk
-            when (val result = ethereum.connectSign(message)) {
+            // Use direct signMessage() method (requires connection first via connect())
+            // This is more explicit and predictable than connectSign() which forces connection
+            // Based on SDK docs: ethereum.signMessage() requires address and message
+            val address = ethereum.selectedAddress
+                ?: throw IllegalStateException("No connected account. Call connect() first.")
+            
+            // Create EthereumRequest for personal_sign
+            val request = EthereumRequest(
+                method = EthereumMethod.PERSONAL_SIGN.value,
+                params = listOf(address, message)
+            )
+            
+            // Convert callback-based sendRequest() to suspend function
+            val result = suspendCancellableCoroutine<Result> { continuation ->
+                ethereum.sendRequest(request) { callbackResult ->
+                    if (continuation.isActive) {
+                        continuation.resume(callbackResult)
+                    }
+                }
+            }
+            
+            when (result) {
                 is Result.Success.Item -> {
                     // Extract signature from result
                     result.value as? String

@@ -7,8 +7,7 @@ import com.facebook.react.BaseReactPackage
 
 class NitroMetamaskPackage : BaseReactPackage() {
     override fun getModule(name: String, reactContext: ReactApplicationContext): NativeModule? {
-        // Store the ReactApplicationContext for use in HybridMetamaskConnector
-        HybridMetamaskConnector.setReactContext(reactContext)
+        // No need to store ReactApplicationContext - HybridMetamaskConnector uses NitroRuntime
         return null
     }
 
