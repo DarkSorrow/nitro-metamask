@@ -2,6 +2,7 @@ import UIKit
 import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
+import MetaMaskSDK
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -30,6 +31,26 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     )
 
     return true
+  }
+  
+  // Handle deep links from MetaMask wallet
+  // MetaMask returns to the app via deep link after signing/connecting
+  // Reference: https://github.com/MetaMask/metamask-ios-sdk
+  func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    // Check if this is a MetaMask deep link (host="mmsdk")
+    if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+       components.host == "mmsdk" {
+      // Handle MetaMask deep link return
+      MetaMaskSDK.shared.handleUrl(url)
+      return true
+    }
+    
+    // Handle other deep links (e.g., React Native Linking)
+    return false
   }
 }
 

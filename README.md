@@ -51,7 +51,51 @@ Add this inside your `MainActivity` `<activity>` tag:
 
 ### iOS Configuration
 
-For iOS, the MetaMask SDK handles deep linking automatically. No additional configuration is required in `Info.plist`.
+**For Expo projects:** The package includes an Expo config plugin that automatically adds the required AppDelegate code. Just add the plugin to your `app.json` or `app.config.js`:
+
+```json
+{
+  "expo": {
+    "plugins": ["@novastera-oss/nitro-metamask"]
+  }
+}
+```
+
+The plugin will automatically:
+- Add the `import MetaMaskSDK` statement
+- Add the `application(_:open:options:)` method to handle MetaMask deep links
+- Work with both Swift and Objective-C AppDelegate files
+
+**For bare React Native projects:** Add deep link handling manually in your `AppDelegate.swift` (or `AppDelegate.m` for Objective-C):
+
+**File:** `ios/YourAppName/AppDelegate.swift`
+
+```swift
+import MetaMaskSDK
+
+// ... existing AppDelegate code ...
+
+// Handle deep links from MetaMask wallet
+// MetaMask returns to the app via deep link after signing/connecting
+func application(
+  _ app: UIApplication,
+  open url: URL,
+  options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+) -> Bool {
+  // Check if this is a MetaMask deep link (host="mmsdk")
+  if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+     components.host == "mmsdk" {
+    // Handle MetaMask deep link return
+    MetaMaskSDK.shared.handleUrl(url)
+    return true
+  }
+  
+  // Handle other deep links (e.g., React Native Linking)
+  return false
+}
+```
+
+**Info.plist:** The URL scheme is automatically detected from your `Info.plist` `CFBundleURLSchemes` configuration. Ensure you have a URL scheme configured (e.g., `nitrometamask`).
 
 ## Usage
 
