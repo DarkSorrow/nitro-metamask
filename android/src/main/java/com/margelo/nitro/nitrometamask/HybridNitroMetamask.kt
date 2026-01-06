@@ -22,6 +22,10 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
     @Volatile
     private var dappUrl: String? = null
     
+    // Configurable deep link scheme - if not set, will attempt auto-detection
+    @Volatile
+    private var configuredDeepLinkScheme: String? = null
+    
     // Ethereum SDK instance - lazy initialization
     @Volatile
     private var ethereumInstance: Ethereum? = null
@@ -29,6 +33,10 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
     // Track the URL used when creating the current SDK instance
     @Volatile
     private var lastUsedUrl: String? = null
+    
+    // Cache the detected deep link scheme to avoid repeated detection
+    @Volatile
+    private var cachedDeepLinkScheme: String? = null
     
     // Get or create Ethereum SDK instance
     // Important: DappMetadata.url must be a valid HTTP/HTTPS URL (not a deep link scheme)
@@ -71,57 +79,114 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
         }
     
     
-    override fun configure(dappUrl: String?) {
+    override fun configure(dappUrl: String?, deepLinkScheme: String?) {
         synchronized(this) {
             val urlToUse = dappUrl ?: "https://novastera.com"
+            val schemeToUse = deepLinkScheme?.takeIf { it.isNotEmpty() }
+            
+            var changed = false
             if (this.dappUrl != urlToUse) {
                 this.dappUrl = urlToUse
+                changed = true
+            }
+            if (this.configuredDeepLinkScheme != schemeToUse) {
+                this.configuredDeepLinkScheme = schemeToUse
+                // Clear cached detection when manually configured
+                cachedDeepLinkScheme = null
+                changed = true
+            }
+            
+            if (changed) {
                 // Invalidate existing instance to force recreation with new URL
                 ethereumInstance = null
                 lastUsedUrl = null
-                Log.d("NitroMetamask", "configure: Dapp URL set to $urlToUse. Deep link return is handled automatically via AndroidManifest.xml")
+                if (schemeToUse != null) {
+                    Log.d("NitroMetamask", "configure: Dapp URL set to $urlToUse, deep link scheme set to $schemeToUse")
+                } else {
+                    Log.d("NitroMetamask", "configure: Dapp URL set to $urlToUse. Deep link scheme will be auto-detected from AndroidManifest.xml")
+                }
             }
         }
     }
     
     /**
-     * Dynamically detect the deep link scheme from AndroidManifest.xml
-     * Looks for intent filters with host="mmsdk" (MetaMask's expected host)
+     * Get the deep link scheme - uses configured value first, then attempts auto-detection.
+     * Directly reads intent filters from PackageManager to find the scheme with host="mmsdk"
      * Returns the scheme if found, null otherwise
+     * 
+     * The scheme is cached after first detection to avoid repeated queries.
      */
     private fun getDeepLinkScheme(context: android.content.Context): String? {
+        // Use configured scheme if available
+        configuredDeepLinkScheme?.let { return it }
+        
+        // Return cached detected scheme if available
+        cachedDeepLinkScheme?.let { return it }
+        
         return try {
             val packageManager = context.packageManager
             val packageName = context.packageName
             
-            // Try common scheme patterns based on package name
-            // Common patterns: package name, package name without dots, "nitrometamask"
-            val possibleSchemes = listOf(
-                "nitrometamask", // Known scheme from manifest
-                packageName.replace(".", ""), // com.nitrometamaskexample -> comnitrometamaskexample
-                packageName.split(".").lastOrNull() ?: "", // Last part of package
-                packageName.replace(".", "-") // com.nitrometamaskexample -> com-nitrometamaskexample
-            ).filter { it.isNotEmpty() }
+            // Query for activities that can handle VIEW intents with BROWSABLE category
+            val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                addCategory(android.content.Intent.CATEGORY_DEFAULT)
+                addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+            }
             
-            // Test each possible scheme by trying to resolve an intent with mmsdk host
-            for (scheme in possibleSchemes) {
-                val testUri = Uri.parse("$scheme://mmsdk")
-                val testIntent = Intent(Intent.ACTION_VIEW, testUri).apply {
-                    addCategory(android.content.Intent.CATEGORY_DEFAULT)
-                    addCategory(android.content.Intent.CATEGORY_BROWSABLE)
-                }
-                
-                // Try to resolve this intent - if it resolves to our package, we found the scheme
-                val resolveInfoList = packageManager.queryIntentActivities(testIntent, PackageManager.MATCH_DEFAULT_ONLY)
-                for (resolveInfo in resolveInfoList) {
-                    if (resolveInfo.activityInfo?.packageName == packageName) {
-                        Log.d("NitroMetamask", "Detected deep link scheme: $scheme from activity ${resolveInfo.activityInfo.name}")
-                        return scheme
+            val resolveList = packageManager.queryIntentActivities(viewIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            
+            // Look for activities in our package
+            for (resolveInfo in resolveList) {
+                if (resolveInfo.activityInfo?.packageName == packageName) {
+                    val filter = resolveInfo.filter ?: continue
+                    
+                    // Check if this filter has the required actions and categories
+                    if (!filter.hasAction(Intent.ACTION_VIEW)) continue
+                    if (!filter.hasCategory(android.content.Intent.CATEGORY_DEFAULT)) continue
+                    if (!filter.hasCategory(android.content.Intent.CATEGORY_BROWSABLE)) continue
+                    
+                    // Get all data schemes from this filter
+                    val schemeCount = filter.countDataSchemes()
+                    for (schemeIdx in 0 until schemeCount) {
+                        val scheme = filter.getDataScheme(schemeIdx)
+                        if (scheme != null) {
+                            // Check if this scheme has mmsdk host in any authority
+                            val authorityCount = filter.countDataAuthorities()
+                            var hasMmsdkHost = false
+                            for (authIdx in 0 until authorityCount) {
+                                val authority = filter.getDataAuthority(authIdx)
+                                if (authority != null && authority.host == "mmsdk") {
+                                    hasMmsdkHost = true
+                                    break
+                                }
+                            }
+                            
+                            if (hasMmsdkHost) {
+                                // Verify this scheme with mmsdk host resolves to our package
+                                val testUri = Uri.parse("$scheme://mmsdk")
+                                val testIntent = Intent(Intent.ACTION_VIEW, testUri).apply {
+                                    addCategory(android.content.Intent.CATEGORY_DEFAULT)
+                                    addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+                                }
+                                
+                                // Verify this intent resolves to our package
+                                val testResolveList = packageManager.queryIntentActivities(testIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                                for (testResolveInfo in testResolveList) {
+                                    if (testResolveInfo.activityInfo?.packageName == packageName) {
+                                        // Cache the detected scheme
+                                        cachedDeepLinkScheme = scheme
+                                        Log.d("NitroMetamask", "Detected deep link scheme: $scheme from activity ${resolveInfo.activityInfo?.name}")
+                                        return scheme
+                                    }
+                                }
+                                Log.w("NitroMetamask", "Scheme $scheme with mmsdk host found but does not resolve to package $packageName")
+                            }
+                        }
                     }
                 }
             }
             
-            Log.w("NitroMetamask", "Could not detect deep link scheme from AndroidManifest.xml. Tried: ${possibleSchemes.joinToString()}")
+            Log.w("NitroMetamask", "Could not detect deep link scheme from AndroidManifest.xml. Searched ${resolveList.size} activities in package $packageName")
             null
         } catch (e: Exception) {
             Log.w("NitroMetamask", "Error detecting deep link scheme: ${e.message}", e)
@@ -145,7 +210,7 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
                 try {
                     val deepLinkScheme = getDeepLinkScheme(context)
                     if (deepLinkScheme != null) {
-                        // Use the detected deep link scheme to bring app to foreground
+                        // Use the configured or detected deep link scheme to bring app to foreground
                         // This is the same deep link that MetaMask app would trigger
                         // Deep links work from background (unlike getLaunchIntentForPackage)
                         val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -162,7 +227,7 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
                     } else {
                         // Cannot use getLaunchIntentForPackage() - Android blocks it from background
                         // MetaMask should handle the return via deep link automatically
-                        Log.w("NitroMetamask", "Could not detect deep link scheme. MetaMask should return app automatically via deep link.")
+                        Log.w("NitroMetamask", "Could not determine deep link scheme. Please configure it via configure(dappUrl, deepLinkScheme) or ensure AndroidManifest.xml has the correct intent filter.")
                     }
                 } catch (e: Exception) {
                     // Silently fail - better than crashing

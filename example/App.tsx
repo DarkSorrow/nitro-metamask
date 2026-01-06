@@ -5,6 +5,12 @@ import { NitroMetamask } from '@novastera-oss/nitro-metamask';
 function App(): React.JSX.Element {
   const [result, setResult] = useState<string>('');
 
+  // Configure the library on mount
+  // The deep link scheme must match your AndroidManifest.xml intent filter
+  useEffect(() => {
+    NitroMetamask.configure('https://novastera.com', 'nitrometamask');
+  }, []);
+
   const handleConnect = async () => {
     try {
       const connectResult = await NitroMetamask.connect();

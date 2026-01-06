@@ -9,9 +9,10 @@ final class HybridNitroMetamask: HybridNitroMetamaskSpec {
   // iOS SDK handles deep linking automatically via Info.plist
   private var dappUrl: String? = nil
   
-  func configure(dappUrl: String?) {
+  func configure(dappUrl: String?, deepLinkScheme: String?) {
     // iOS SDK handles deep linking automatically via Info.plist
     // Store the URL for consistency with Android implementation
+    // deepLinkScheme is ignored on iOS as it's handled automatically
     self.dappUrl = dappUrl
     NSLog("NitroMetamask: configure: Dapp URL set to \(dappUrl ?? "default"). Deep link handled automatically via Info.plist")
   }
