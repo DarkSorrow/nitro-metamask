@@ -221,74 +221,64 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
         // Reference: https://github.com/MetaMask/metamask-android-sdk
         // The SDK's connectSign method handles connection and signing in one call
         return Promise.async {
-            // Construct JSON message with only nonce and exp
-            // We don't include address or chainID - just encrypt nonce and exp
-            val message = org.json.JSONObject().apply {
-                put("nonce", nonce)
-                put("exp", exp)
-            }.toString()
-            
-            Log.d("NitroMetamask", "connectSign: Constructed message with nonce and exp: $message")
-            
-            // Use the SDK's connectSign method - it will connect if needed and sign the message
-            // This is the recommended approach per MetaMask Android SDK documentation
-            val result = suspendCancellableCoroutine<Result> { continuation ->
-                Log.d("NitroMetamask", "connectSign: Calling ethereum.connectSign with message")
-                ethereum.connectSign(message) { callbackResult ->
-                    Log.d("NitroMetamask", "connectSign: Received callback result: ${callbackResult.javaClass.simpleName}")
-                    if (continuation.isActive) {
-                        continuation.resume(callbackResult)
-                    } else {
-                        Log.w("NitroMetamask", "connectSign: Continuation not active, ignoring callback")
-                    }
-                }
-            }
-            
-            Log.d("NitroMetamask", "connectSign: Processing result")
-            when (result) {
-                is Result.Success.Item -> {
-                    val signature = result.value as? String
-                        ?: throw Exception("Invalid signature response format")
-                    
-                    // After connectSign completes, check if we can get the address
-                    val address = ethereum.selectedAddress
-                    val chainId = ethereum.chainId
-                    
-                    if (address != null) {
-                        Log.d("NitroMetamask", "connectSign: Signature received successfully, address=$address, chainId=$chainId")
-                    } else {
-                        Log.w("NitroMetamask", "connectSign: Signature received but address is null")
-                    }
-                    
-                    // Bring app to foreground after receiving the result
-                    // This must be done on the main thread
-                    val context = MetamaskContextHolder.get()
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                data = Uri.parse("nitrometamask://mmsdk")
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                setPackage(context.packageName)
-                            }
-                            context.startActivity(intent)
-                            Log.d("NitroMetamask", "Brought app to foreground after connectSign")
-                        } catch (e: Exception) {
-                            Log.w("NitroMetamask", "Failed to bring app to foreground: ${e.message}")
+            try {
+                // Construct JSON message with only nonce and exp
+                // We don't include address or chainID - just encrypt nonce and exp
+                val message = org.json.JSONObject().apply {
+                    put("nonce", nonce)
+                    put("exp", exp)
+                }.toString()
+                
+                Log.d("NitroMetamask", "connectSign: Constructed message with nonce and exp: $message")
+                
+                // Use the SDK's connectSign method - it will connect if needed and sign the message
+                // This is the recommended approach per MetaMask Android SDK documentation
+                // The SDK will handle bringing the app back to foreground via deep linking
+                val result = suspendCancellableCoroutine<Result> { continuation ->
+                    Log.d("NitroMetamask", "connectSign: Calling ethereum.connectSign with message")
+                    ethereum.connectSign(message) { callbackResult ->
+                        Log.d("NitroMetamask", "connectSign: Received callback result: ${callbackResult.javaClass.simpleName}")
+                        if (continuation.isActive) {
+                            continuation.resume(callbackResult)
+                        } else {
+                            Log.w("NitroMetamask", "connectSign: Continuation not active, ignoring callback")
                         }
                     }
-                    
-                    signature
                 }
-                is Result.Success.ItemMap -> {
-                    throw IllegalStateException("Unexpected ItemMap result from MetaMask connectSign")
+                
+                Log.d("NitroMetamask", "connectSign: Processing result")
+                when (result) {
+                    is Result.Success.Item -> {
+                        val signature = result.value as? String
+                            ?: throw Exception("Invalid signature response format")
+                        
+                        // After connectSign completes, check if we can get the address
+                        val address = ethereum.selectedAddress
+                        val chainId = ethereum.chainId
+                        
+                        if (address != null) {
+                            Log.d("NitroMetamask", "connectSign: Signature received successfully, address=$address, chainId=$chainId")
+                        } else {
+                            Log.w("NitroMetamask", "connectSign: Signature received but address is null")
+                        }
+                        
+                        signature
+                    }
+                    is Result.Success.ItemMap -> {
+                        throw IllegalStateException("Unexpected ItemMap result from MetaMask connectSign")
+                    }
+                    is Result.Success.Items -> {
+                        throw IllegalStateException("Unexpected Items result from MetaMask connectSign")
+                    }
+                    is Result.Error -> {
+                        val errorMessage = result.error?.message ?: result.error?.toString() ?: "MetaMask connectSign failed"
+                        Log.e("NitroMetamask", "connectSign: Error from MetaMask SDK: $errorMessage")
+                        throw Exception(errorMessage)
+                    }
                 }
-                is Result.Success.Items -> {
-                    throw IllegalStateException("Unexpected Items result from MetaMask connectSign")
-                }
-                is Result.Error -> {
-                    val errorMessage = result.error?.message ?: result.error?.toString() ?: "MetaMask connectSign failed"
-                    throw Exception(errorMessage)
-                }
+            } catch (e: Exception) {
+                Log.e("NitroMetamask", "connectSign: Unexpected error", e)
+                throw e
             }
         }
     }
