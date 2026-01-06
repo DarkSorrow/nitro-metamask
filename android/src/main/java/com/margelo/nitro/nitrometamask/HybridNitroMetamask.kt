@@ -219,189 +219,75 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
         // Reference: https://nitro.margelo.com/docs/types/promises
         // Based on MetaMask Android SDK: ethereum.connectSign(message)
         // Reference: https://github.com/MetaMask/metamask-android-sdk
-        // This convenience method connects (if needed) and signs a JSON message
+        // The SDK's connectSign method handles connection and signing in one call
         return Promise.async {
-            // First, ensure we're connected to get address and chainId
-            val address = ethereum.selectedAddress
-            val chainIdString = ethereum.chainId
+            // Construct JSON message with only nonce and exp
+            // We don't include address or chainID - just encrypt nonce and exp
+            val message = org.json.JSONObject().apply {
+                put("nonce", nonce)
+                put("exp", exp)
+            }.toString()
             
-            // If not connected, connect first
-            if (address.isNullOrEmpty() || chainIdString.isNullOrEmpty()) {
-                val connectResult = suspendCancellableCoroutine<Result> { continuation ->
-                    ethereum.connect { callbackResult ->
-                        if (continuation.isActive) {
-                            continuation.resume(callbackResult)
-                        }
-                    }
-                }
-                
-                when (connectResult) {
-                    is Result.Success.Item -> {
-                        // Connection successful, get address and chainId
-                        val connectedAddress = ethereum.selectedAddress
-                            ?: throw IllegalStateException("MetaMask SDK returned no address after connection")
-                        val connectedChainId = ethereum.chainId
-                            ?: throw IllegalStateException("MetaMask SDK returned no chainId after connection")
-                        
-                        // Parse chainId to number
-                        val chainId = try {
-                            val chainIdInt = if (connectedChainId.startsWith("0x") || connectedChainId.startsWith("0X")) {
-                                connectedChainId.substring(2).toLong(16).toInt()
-                            } else {
-                                connectedChainId.toLong().toInt()
-                            }
-                            chainIdInt
-                        } catch (e: NumberFormatException) {
-                            throw IllegalStateException("Invalid chainId format: $connectedChainId")
-                        }
-                        
-                        // Construct JSON message
-                        val message = org.json.JSONObject().apply {
-                            put("address", connectedAddress)
-                            put("chainID", chainId)
-                            put("nonce", nonce)
-                            put("exp", exp)
-                        }.toString()
-                        
-                        // Sign the message using sendRequest with personal_sign (same as signMessage)
-                        // This ensures proper deep link handling for returning to the app
-                        val request = EthereumRequest(
-                            method = "personal_sign",
-                            params = listOf(connectedAddress, message)
-                        )
-                        
-                        val signResult = suspendCancellableCoroutine<Result> { signContinuation ->
-                            ethereum.sendRequest(request) { callbackResult ->
-                                if (signContinuation.isActive) {
-                                    signContinuation.resume(callbackResult)
-                                }
-                            }
-                        }
-                        
-                        when (signResult) {
-                            is Result.Success.Item -> {
-                                val signature = signResult.value as? String
-                                    ?: throw Exception("Invalid signature response format")
-                                
-                                // Bring app to foreground after receiving the result
-                                // This must be done on the main thread
-                                val context = MetamaskContextHolder.get()
-                                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                                            data = Uri.parse("nitrometamask://mmsdk")
-                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                            setPackage(context.packageName)
-                                        }
-                                        context.startActivity(intent)
-                                        Log.d("NitroMetamask", "Brought app to foreground after connectSign")
-                                    } catch (e: Exception) {
-                                        Log.w("NitroMetamask", "Failed to bring app to foreground: ${e.message}")
-                                    }
-                                }
-                                
-                                signature
-                            }
-                            is Result.Success.ItemMap -> {
-                                // Handle ItemMap case (shouldn't happen for personal_sign, but make exhaustive)
-                                throw IllegalStateException("Unexpected ItemMap result from MetaMask connectSign")
-                            }
-                            is Result.Success.Items -> {
-                                // Handle Items case (shouldn't happen for personal_sign, but make exhaustive)
-                                throw IllegalStateException("Unexpected Items result from MetaMask connectSign")
-                            }
-                            is Result.Error -> {
-                                val errorMessage = signResult.error?.message ?: signResult.error?.toString() ?: "MetaMask signing failed"
-                                throw Exception(errorMessage)
-                            }
-                        }
-                    }
-                    is Result.Error -> {
-                        val errorMessage = connectResult.error?.message ?: connectResult.error?.toString() ?: "MetaMask connection failed"
-                        throw Exception(errorMessage)
-                    }
-                    else -> {
-                        throw IllegalStateException("Unexpected result type from MetaMask connect")
-                    }
-                }
-            } else {
-                // Already connected, construct message and sign
-                val chainId = try {
-                    val chainIdInt = if (chainIdString.startsWith("0x") || chainIdString.startsWith("0X")) {
-                        chainIdString.substring(2).toLong(16).toInt()
+            Log.d("NitroMetamask", "connectSign: Constructed message with nonce and exp: $message")
+            
+            // Use the SDK's connectSign method - it will connect if needed and sign the message
+            // This is the recommended approach per MetaMask Android SDK documentation
+            val result = suspendCancellableCoroutine<Result> { continuation ->
+                Log.d("NitroMetamask", "connectSign: Calling ethereum.connectSign with message")
+                ethereum.connectSign(message) { callbackResult ->
+                    Log.d("NitroMetamask", "connectSign: Received callback result: ${callbackResult.javaClass.simpleName}")
+                    if (continuation.isActive) {
+                        continuation.resume(callbackResult)
                     } else {
-                        chainIdString.toLong().toInt()
-                    }
-                    chainIdInt
-                } catch (e: NumberFormatException) {
-                    throw IllegalStateException("Invalid chainId format: $chainIdString")
-                }
-                
-                // Construct JSON message
-                val message = org.json.JSONObject().apply {
-                    put("address", address)
-                    put("chainID", chainId)
-                    put("nonce", nonce)
-                    put("exp", exp)
-                }.toString()
-                
-                // Sign the message using sendRequest with personal_sign (same as signMessage)
-                // This ensures proper deep link handling for returning to the app
-                val request = EthereumRequest(
-                    method = "personal_sign",
-                    params = listOf(address, message)
-                )
-                
-                // The SDK will automatically handle deep link return to the app
-                val signResult = suspendCancellableCoroutine<Result> { continuation ->
-                    Log.d("NitroMetamask", "connectSign: Sending personal_sign request")
-                    ethereum.sendRequest(request) { callbackResult ->
-                        Log.d("NitroMetamask", "connectSign: Received callback result: ${callbackResult.javaClass.simpleName}")
-                        if (continuation.isActive) {
-                            continuation.resume(callbackResult)
-                        } else {
-                            Log.w("NitroMetamask", "connectSign: Continuation not active, ignoring callback")
-                        }
+                        Log.w("NitroMetamask", "connectSign: Continuation not active, ignoring callback")
                     }
                 }
-                
-                Log.d("NitroMetamask", "connectSign: Processing signResult")
-                when (signResult) {
-                    is Result.Success.Item -> {
-                        val signature = signResult.value as? String
-                            ?: throw Exception("Invalid signature response format")
-                        
-                        // Bring app to foreground after receiving the result
-                        // This must be done on the main thread
-                        val context = MetamaskContextHolder.get()
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            try {
-                                val intent = Intent(Intent.ACTION_VIEW).apply {
-                                    data = Uri.parse("nitrometamask://mmsdk")
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                    setPackage(context.packageName)
-                                }
-                                context.startActivity(intent)
-                                Log.d("NitroMetamask", "Brought app to foreground after connectSign (already connected)")
-                            } catch (e: Exception) {
-                                Log.w("NitroMetamask", "Failed to bring app to foreground: ${e.message}")
+            }
+            
+            Log.d("NitroMetamask", "connectSign: Processing result")
+            when (result) {
+                is Result.Success.Item -> {
+                    val signature = result.value as? String
+                        ?: throw Exception("Invalid signature response format")
+                    
+                    // After connectSign completes, check if we can get the address
+                    val address = ethereum.selectedAddress
+                    val chainId = ethereum.chainId
+                    
+                    if (address != null) {
+                        Log.d("NitroMetamask", "connectSign: Signature received successfully, address=$address, chainId=$chainId")
+                    } else {
+                        Log.w("NitroMetamask", "connectSign: Signature received but address is null")
+                    }
+                    
+                    // Bring app to foreground after receiving the result
+                    // This must be done on the main thread
+                    val context = MetamaskContextHolder.get()
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                data = Uri.parse("nitrometamask://mmsdk")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                                setPackage(context.packageName)
                             }
+                            context.startActivity(intent)
+                            Log.d("NitroMetamask", "Brought app to foreground after connectSign")
+                        } catch (e: Exception) {
+                            Log.w("NitroMetamask", "Failed to bring app to foreground: ${e.message}")
                         }
-                        
-                        signature
                     }
-                    is Result.Success.ItemMap -> {
-                        // Handle ItemMap case (shouldn't happen for personal_sign, but make exhaustive)
-                        throw IllegalStateException("Unexpected ItemMap result from MetaMask connectSign")
-                    }
-                    is Result.Success.Items -> {
-                        // Handle Items case (shouldn't happen for personal_sign, but make exhaustive)
-                        throw IllegalStateException("Unexpected Items result from MetaMask connectSign")
-                    }
-                    is Result.Error -> {
-                        val errorMessage = signResult.error?.message ?: signResult.error?.toString() ?: "MetaMask signing failed"
-                        throw Exception(errorMessage)
-                    }
+                    
+                    signature
+                }
+                is Result.Success.ItemMap -> {
+                    throw IllegalStateException("Unexpected ItemMap result from MetaMask connectSign")
+                }
+                is Result.Success.Items -> {
+                    throw IllegalStateException("Unexpected Items result from MetaMask connectSign")
+                }
+                is Result.Error -> {
+                    val errorMessage = result.error?.message ?: result.error?.toString() ?: "MetaMask connectSign failed"
+                    throw Exception(errorMessage)
                 }
             }
         }
