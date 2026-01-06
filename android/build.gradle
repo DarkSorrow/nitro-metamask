@@ -36,7 +36,7 @@ def getExtOrIntegerDefault(name) {
 }
 
 android {
-  namespace "com.nitrometamask"
+  namespace "com.margelo.nitro.nitrometamask"
 
   ndkVersion getExtOrDefault("ndkVersion")
   compileSdkVersion getExtOrIntegerDefault("compileSdkVersion")
@@ -152,6 +152,6 @@ if (isNewArchitectureEnabled()) {
   react {
     jsRootDir = file("../src/")
     libraryName = "NitroMetamask"
-    codegenJavaPackageName = "com.nitrometamask"
+    codegenJavaPackageName = "com.margelo.nitro.nitrometamask"
   }
 }

@@ -1,4 +1,4 @@
-package com.nitrometamask
+package com.margelo.nitro.nitrometamask
 
 import com.facebook.react.BaseReactPackage
 import com.facebook.react.bridge.NativeModule

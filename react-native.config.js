@@ -11,7 +11,7 @@ module.exports = {
        * @type {import('@react-native-community/cli-types').AndroidDependencyParams}
        */
       android: {
-        packageImportPath: 'import com.nitrometamask.NitroMetamaskPackage;',
+        packageImportPath: 'import com.margelo.nitro.nitrometamask.NitroMetamaskPackage;',
         packageInstance: 'new NitroMetamaskPackage()',
       },
     },

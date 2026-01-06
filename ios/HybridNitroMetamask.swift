@@ -4,6 +4,17 @@ import Foundation
 
 final class HybridNitroMetamask: HybridNitroMetamaskSpec {
   private let sdk = MetaMaskSDK.shared
+  
+  // Configurable dapp URL - stored for consistency with Android
+  // iOS SDK handles deep linking automatically via Info.plist
+  private var dappUrl: String? = nil
+  
+  func configure(dappUrl: String?) {
+    // iOS SDK handles deep linking automatically via Info.plist
+    // Store the URL for consistency with Android implementation
+    self.dappUrl = dappUrl
+    NSLog("NitroMetamask: configure: Dapp URL set to \(dappUrl ?? "default"). Deep link handled automatically via Info.plist")
+  }
 
   func connect() -> Promise<ConnectResult> {
     // Use Promise.async with Swift async/await for best practice in Nitro modules
@@ -90,6 +101,140 @@ final class HybridNitroMetamask: HybridNitroMetamaskSpec {
           code: -1,
           userInfo: [NSLocalizedDescriptionKey: "Invalid signature response format"]
         )
+      }
+    }
+  }
+
+  func connectSign(nonce: String, exp: Int64) -> Promise<String> {
+    // Use Promise.async with Swift async/await for best practice in Nitro modules
+    // Reference: https://nitro.margelo.com/docs/types/promises
+    // Based on MetaMask iOS SDK: connect and sign in one call
+    // Reference: https://github.com/MetaMask/metamask-ios-sdk
+    return Promise.async {
+      // First, ensure we're connected
+      var address = self.sdk.account
+      var chainIdHex = self.sdk.chainId
+      
+      // If not connected, connect first
+      if address == nil || address?.isEmpty == true || chainIdHex == nil || chainIdHex?.isEmpty == true {
+        let connectResult = try await self.sdk.connect()
+        
+        switch connectResult {
+        case .success:
+          address = self.sdk.account
+          chainIdHex = self.sdk.chainId
+          
+          guard let account = address, !account.isEmpty else {
+            throw NSError(
+              domain: "MetamaskConnector",
+              code: -1,
+              userInfo: [NSLocalizedDescriptionKey: "MetaMask SDK returned no address after connection"]
+            )
+          }
+          
+          guard let chainId = chainIdHex, !chainId.isEmpty,
+                let chainIdInt = Int(chainId.replacingOccurrences(of: "0x", with: ""), radix: 16) else {
+            throw NSError(
+              domain: "MetamaskConnector",
+              code: -1,
+              userInfo: [NSLocalizedDescriptionKey: "Invalid chainId format"]
+            )
+          }
+          
+          // Construct JSON message
+          let messageDict: [String: Any] = [
+            "address": account,
+            "chainID": chainIdInt,
+            "nonce": nonce,
+            "exp": exp
+          ]
+          
+          guard let jsonData = try? JSONSerialization.data(withJSONObject: messageDict),
+                let message = String(data: jsonData, encoding: .utf8) else {
+            throw NSError(
+              domain: "MetamaskConnector",
+              code: -1,
+              userInfo: [NSLocalizedDescriptionKey: "Failed to create JSON message"]
+            )
+          }
+          
+          // Create EthereumRequest for personal_sign
+          let params: [String] = [account, message]
+          let request = EthereumRequest(
+            method: .personalSign,
+            params: params
+          )
+          
+          // Make the request using the SDK's async request method
+          let result = try await self.sdk.request(request)
+          
+          // Extract signature from response
+          if let signature = result as? String {
+            return signature
+          } else if let dict = result as? [String: Any], let sig = dict["signature"] as? String ?? dict["result"] as? String {
+            return sig
+          } else {
+            throw NSError(
+              domain: "MetamaskConnector",
+              code: -1,
+              userInfo: [NSLocalizedDescriptionKey: "Invalid signature response format"]
+            )
+          }
+          
+        case .failure(let error):
+          throw error
+        }
+      } else {
+        // Already connected, construct message and sign
+        guard let account = address, !account.isEmpty,
+              let chainId = chainIdHex, !chainId.isEmpty,
+              let chainIdInt = Int(chainId.replacingOccurrences(of: "0x", with: ""), radix: 16) else {
+          throw NSError(
+            domain: "MetamaskConnector",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "Invalid connection state"]
+          )
+        }
+        
+        // Construct JSON message
+        let messageDict: [String: Any] = [
+          "address": account,
+          "chainID": chainIdInt,
+          "nonce": nonce,
+          "exp": Int64(exp)
+        ]
+        
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: messageDict),
+              let message = String(data: jsonData, encoding: .utf8) else {
+          throw NSError(
+            domain: "MetamaskConnector",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "Failed to create JSON message"]
+          )
+        }
+        
+        // Create EthereumRequest for personal_sign
+        let params: [String] = [account, message]
+        let request = EthereumRequest(
+          method: .personalSign,
+          params: params
+        )
+        
+        // Make the request using the SDK's async request method
+        let result = try await self.sdk.request(request)
+        
+        // Extract signature from response
+        if let signature = result as? String {
+          return signature
+        } else if let dict = result as? [String: Any], let sig = dict["signature"] as? String ?? dict["result"] as? String {
+          return sig
+        } else {
+          throw NSError(
+            domain: "MetamaskConnector",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "Invalid signature response format"]
+          )
+        }
       }
     }
   }

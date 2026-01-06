@@ -1,4 +1,4 @@
-package com.nitrometamask
+package com.margelo.nitro.nitrometamask
 
 import android.content.Context
 
