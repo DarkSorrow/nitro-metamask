@@ -54,7 +54,7 @@ final class HybridNitroMetamask: HybridNitroMetamaskSpec {
         
         return ConnectResult(
           address: address,
-          chainId: Double(chainIdInt)
+          chainId: Int64(chainIdInt)
         )
         
       case .failure(let error):
@@ -106,7 +106,7 @@ final class HybridNitroMetamask: HybridNitroMetamaskSpec {
     }
   }
 
-  func connectSign(nonce: String, exp: Int64) -> Promise<String> {
+  func connectSign(nonce: String, exp: Int64) -> Promise<ConnectSignResult> {
     // Use Promise.async with Swift async/await for best practice in Nitro modules
     // Reference: https://nitro.margelo.com/docs/types/promises
     // Based on MetaMask iOS SDK: connectAndSign(message:) convenience method
@@ -137,21 +137,65 @@ final class HybridNitroMetamask: HybridNitroMetamaskSpec {
       
       switch connectSignResult {
       case .success(let signature):
-        // After connectSign completes, check if we can get the address
-        let finalAddress = self.sdk.account
-        let finalChainId = self.sdk.chainId
-        
-        if let addr = finalAddress, !addr.isEmpty {
-          NSLog("NitroMetamask: connectSign: Signature received successfully, address=\(addr), chainId=\(finalChainId ?? "nil")")
-        } else {
-          NSLog("NitroMetamask: connectSign: Signature received but address is nil")
+        // After connectSign completes, get the address and chainId from the SDK
+        guard let address = self.sdk.account, !address.isEmpty else {
+          throw NSError(
+            domain: "MetamaskConnector",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "Failed to retrieve address after connectSign"]
+          )
         }
         
-        // connectAndSign returns the signature string directly
-        return signature
+        guard let chainIdHex = self.sdk.chainId, !chainIdHex.isEmpty else {
+          throw NSError(
+            domain: "MetamaskConnector",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "Failed to retrieve chainId after connectSign"]
+          )
+        }
+        
+        // Parse chainId from hex string (e.g., "0x1") to Int64
+        guard let chainId = Int64(chainIdHex.replacingOccurrences(of: "0x", with: ""), radix: 16) else {
+          throw NSError(
+            domain: "MetamaskConnector",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "Invalid chainId format: \(chainIdHex)"]
+          )
+        }
+        
+        NSLog("NitroMetamask: connectSign: Signature received successfully, address=\(address), chainId=\(chainId)")
+        
+        // Return ConnectSignResult with signature, address, and chainId
+        return ConnectSignResult(signature: signature, address: address, chainId: chainId)
         
       case .failure(let error):
         throw error
+      }
+    }
+  }
+
+  func getAddress() -> Promise<Variant_NullType_String> {
+    return Promise.async {
+      if let account = self.sdk.account, !account.isEmpty {
+        return Variant_NullType_String.second(account)
+      } else {
+        return Variant_NullType_String.first(NullType())
+      }
+    }
+  }
+
+  func getChainId() -> Promise<Variant_NullType_Int64> {
+    return Promise.async {
+      guard let chainIdHex = self.sdk.chainId, !chainIdHex.isEmpty else {
+        return Variant_NullType_Int64.first(NullType())
+      }
+      
+      // Parse chainId from hex string (e.g., "0x1") to Int64 (bigint maps to Int64 in Swift)
+      if let chainIdInt = Int64(chainIdHex.replacingOccurrences(of: "0x", with: ""), radix: 16) {
+        return Variant_NullType_Int64.second(chainIdInt)
+      } else {
+        NSLog("NitroMetamask: Invalid chainId format: \(chainIdHex)")
+        return Variant_NullType_Int64.first(NullType())
       }
     }
   }

@@ -50,12 +50,19 @@ function App(): React.JSX.Element {
       
       // connectSign will:
       // 1. Connect to MetaMask (if not already connected)
-      // 2. Construct JSON: { address, chainID, nonce, exp }
+      // 2. Construct JSON: { nonce, exp }
       // 3. Sign the JSON stringified message
-      // 4. Return the signature
-      const signature = await NitroMetamask.connectSign(nonce, exp);
-      setResult(`Connect & Sign: ${signature.substring(0, 20)}...`);
-      Alert.alert('Success', `Connected and signed successfully!\n\nSignature: ${signature.substring(0, 30)}...`);
+      // 4. Return ConnectSignResult with signature, address, and chainId
+      const result = await NitroMetamask.connectSign(nonce, exp);
+      
+      const addressDisplay = result.address ? `Address: ${result.address}\n` : '';
+      const chainIdDisplay = result.chainId !== null ? `Chain ID: ${result.chainId}\n` : '';
+      
+      setResult(`Connect & Sign: ${result.signature.substring(0, 20)}...\n${addressDisplay}${chainIdDisplay}`);
+      /*Alert.alert(
+        'Success', 
+        `Connected and signed successfully!\n\n${addressDisplay}${chainIdDisplay}Signature: ${result.signature.substring(0, 30)}...`
+      );*/
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       setResult(`Error: ${errorMessage}`);

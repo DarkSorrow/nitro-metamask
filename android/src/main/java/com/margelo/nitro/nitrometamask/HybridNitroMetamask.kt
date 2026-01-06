@@ -5,9 +5,12 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.util.Log
 import com.margelo.nitro.core.Promise
+import com.margelo.nitro.core.NullType
 import com.margelo.nitro.nitrometamask.HybridNitroMetamaskSpec
 import com.margelo.nitro.nitrometamask.ConnectResult
 import com.margelo.nitro.nitrometamask.MetamaskContextHolder
+import com.margelo.nitro.nitrometamask.Variant_NullType_String
+import com.margelo.nitro.nitrometamask.Variant_NullType_Long
 import io.metamask.androidsdk.Ethereum
 import io.metamask.androidsdk.Result
 import io.metamask.androidsdk.DappMetadata
@@ -263,15 +266,14 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
                     val chainIdString = ethereum.chainId
                         ?: throw IllegalStateException("MetaMask SDK returned no chainId after connection")
                     
-                    // Parse chainId from hex string (e.g., "0x1") or decimal string to number
-                    // Nitro requires chainId to be Double (number in TS maps to Double in Kotlin)
+                    // Parse chainId from hex string (e.g., "0x1") or decimal string to Long
+                    // chainId is an integer, so we use Long (bigint in TS maps to Long in Kotlin)
                     val chainId = try {
-                        val chainIdInt = if (chainIdString.startsWith("0x") || chainIdString.startsWith("0X")) {
-                            chainIdString.substring(2).toLong(16).toInt()
+                        if (chainIdString.startsWith("0x") || chainIdString.startsWith("0X")) {
+                            chainIdString.substring(2).toLong(16)
                         } else {
-                            chainIdString.toLong().toInt()
+                            chainIdString.toLong()
                         }
-                        chainIdInt.toDouble()
                     } catch (e: NumberFormatException) {
                         throw IllegalStateException("Invalid chainId format: $chainIdString")
                     }
@@ -358,7 +360,7 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
         }
     }
 
-    override fun connectSign(nonce: String, exp: Long): Promise<String> {
+    override fun connectSign(nonce: String, exp: Long): Promise<ConnectSignResult> {
         // Use Promise.async with coroutines for best practice in Nitro modules
         // Reference: https://nitro.margelo.com/docs/types/promises
         // Based on MetaMask Android SDK: ethereum.connectSign(message)
@@ -396,21 +398,123 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
                         val signature = result.value as? String
                             ?: throw Exception("Invalid signature response format")
                         
-                        // After connectSign completes, check if we can get the address
-                        val address = ethereum.selectedAddress
-                        val chainId = ethereum.chainId
-                        
-                        if (address != null) {
-                            Log.d("NitroMetamask", "connectSign: Signature received successfully, address=$address, chainId=$chainId")
-                        } else {
-                            Log.w("NitroMetamask", "connectSign: Signature received but address is null")
+                        // After connectSign, the SDK state might not be immediately updated
+                        // Try to explicitly fetch the account and chainId to ensure they're available
+                        // This will trigger the SDK to update its state if needed
+                        try {
+                            val addressResult = suspendCancellableCoroutine<Result> { continuation ->
+                                ethereum.getEthAccounts { callbackResult ->
+                                    if (continuation.isActive) {
+                                        continuation.resume(callbackResult)
+                                    }
+                                }
+                            }
+                            val chainIdResult = suspendCancellableCoroutine<Result> { continuation ->
+                                ethereum.getChainId { callbackResult ->
+                                    if (continuation.isActive) {
+                                        continuation.resume(callbackResult)
+                                    }
+                                }
+                            }
+                            
+                            // getEthAccounts returns an array of addresses, we need to extract the first one
+                            // The SDK may return Result.Success.Item (JSON string) or Result.Success.Items (List)
+                            Log.d("NitroMetamask", "connectSign: addressResult type: ${addressResult.javaClass.simpleName}")
+                            val address = when (addressResult) {
+                                is Result.Success.Item -> {
+                                    val value = addressResult.value
+                                    Log.d("NitroMetamask", "connectSign: addressResult.Item value type: ${value.javaClass.simpleName}, value: $value")
+                                    // Check if it's a JSON array string that needs parsing
+                                    if (value.startsWith("[") && value.endsWith("]")) {
+                                        try {
+                                            val jsonArray = org.json.JSONArray(value)
+                                            val firstAddr = if (jsonArray.length() > 0) jsonArray.getString(0) else null
+                                            if (firstAddr != null && firstAddr.isNotEmpty()) {
+                                                ethereum.updateAccount(firstAddr)
+                                                Log.d("NitroMetamask", "connectSign: Extracted address from JSON array: $firstAddr")
+                                            }
+                                            firstAddr
+                                        } catch (e: Exception) {
+                                            Log.w("NitroMetamask", "connectSign: Failed to parse address array: ${e.message}")
+                                            // If it's not a JSON array, treat it as a single address
+                                            if (value.isNotEmpty()) {
+                                                ethereum.updateAccount(value)
+                                            }
+                                            value
+                                        }
+                                    } else {
+                                        // Single address string
+                                        if (value.isNotEmpty()) {
+                                            ethereum.updateAccount(value)
+                                        }
+                                        value
+                                    }
+                                }
+                                is Result.Success.Items -> {
+                                    // Array of addresses - get the first one
+                                    Log.d("NitroMetamask", "connectSign: addressResult.Items value size: ${addressResult.value.size}")
+                                    val firstAddr = addressResult.value.firstOrNull()
+                                    if (firstAddr != null && firstAddr.isNotEmpty()) {
+                                        ethereum.updateAccount(firstAddr)
+                                        Log.d("NitroMetamask", "connectSign: Extracted address from Items: $firstAddr")
+                                    }
+                                    firstAddr
+                                }
+                                else -> {
+                                    Log.w("NitroMetamask", "connectSign: Unexpected addressResult type: ${addressResult.javaClass.simpleName}")
+                                    null
+                                }
+                            }
+                            val chainIdStr = when (chainIdResult) {
+                                is Result.Success.Item -> {
+                                    val chainIdValue = chainIdResult.value as? String
+                                    // Update the SDK state with the chainId
+                                    if (chainIdValue != null && chainIdValue.isNotEmpty()) {
+                                        ethereum.updateChainId(chainIdValue)
+                                    }
+                                    chainIdValue
+                                }
+                                else -> null
+                            }
+                            
+                            // Parse chainId from hex string (e.g., "0x1") to Long
+                            val chainId = chainIdStr?.let { chainId ->
+                                try {
+                                    if (chainId.startsWith("0x") || chainId.startsWith("0X")) {
+                                        chainId.substring(2).toLong(16)
+                                    } else {
+                                        chainId.toLong()
+                                    }
+                                } catch (e: NumberFormatException) {
+                                    Log.w("NitroMetamask", "Invalid chainId format: $chainId", e)
+                                    null
+                                }
+                            }
+                            
+                            // Bring app back to foreground immediately after receiving signature
+                            // This must be done on the main thread
+                            bringAppToForeground()
+                            
+                            // Validate that we have all required values
+                            if (address == null || address.isEmpty()) {
+                                throw IllegalStateException("Failed to retrieve address after connectSign. The signature was received but the address could not be determined.")
+                            }
+                            if (chainId == null) {
+                                throw IllegalStateException("Failed to retrieve chainId after connectSign. The signature was received but the chainId could not be determined.")
+                            }
+                            
+                            Log.d("NitroMetamask", "connectSign: Returning ConnectSignResult with signature, address=$address, chainId=$chainId")
+                            
+                            // Return ConnectSignResult with signature, address, and chainId
+                            ConnectSignResult(
+                                signature = signature,
+                                address = address,
+                                chainId = chainId
+                            )
+                        } catch (e: Exception) {
+                            Log.e("NitroMetamask", "connectSign: Error fetching address/chainId: ${e.message}", e)
+                            throw e
                         }
-                        
-                        // Bring app back to foreground immediately after receiving signature
-                        // This must be done on the main thread
-                        bringAppToForeground()
-                        
-                        signature
                     }
                     is Result.Success.ItemMap -> {
                         throw IllegalStateException("Unexpected ItemMap result from MetaMask connectSign")
@@ -427,6 +531,52 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
             } catch (e: Exception) {
                 Log.e("NitroMetamask", "connectSign: Unexpected error", e)
                 throw e
+            }
+        }
+    }
+
+    override fun getAddress(): Promise<Variant_NullType_String> {
+        return Promise.async {
+            // Read from ethereumState.value directly to get the most up-to-date value
+            // The SDK uses LiveData, so the cached properties might not be updated immediately
+            val state = ethereum.ethereumState.value
+            val address = state?.selectedAddress?.takeIf { it.isNotEmpty() } ?: ethereum.selectedAddress
+            Log.d("NitroMetamask", "getAddress: ethereumState.value?.selectedAddress = ${state?.selectedAddress}, ethereum.selectedAddress = ${ethereum.selectedAddress}, final = $address")
+            if (address == null || address.isEmpty()) {
+                Log.w("NitroMetamask", "getAddress: Address is null or empty")
+                // Use NullType.NULL singleton as per Nitro documentation: https://nitro.margelo.com/docs/types/nulls
+                Variant_NullType_String.First(NullType.NULL)
+            } else {
+                Log.d("NitroMetamask", "getAddress: Returning address: $address")
+                Variant_NullType_String.create(address)
+            }
+        }
+    }
+
+    override fun getChainId(): Promise<Variant_NullType_Long> {
+        return Promise.async {
+            // Read from ethereumState.value directly to get the most up-to-date value
+            // The SDK uses LiveData, so the cached properties might not be updated immediately
+            val state = ethereum.ethereumState.value
+            val chainIdString = state?.chainId?.takeIf { it.isNotEmpty() } ?: ethereum.chainId
+            Log.d("NitroMetamask", "getChainId: ethereumState.value?.chainId = ${state?.chainId}, ethereum.chainId = ${ethereum.chainId}, final = $chainIdString")
+            if (chainIdString == null || chainIdString.isEmpty()) {
+                Log.w("NitroMetamask", "getChainId: ChainId is null or empty")
+                // Use NullType.NULL singleton as per Nitro documentation: https://nitro.margelo.com/docs/types/nulls
+                Variant_NullType_Long.First(NullType.NULL)
+            } else {
+                try {
+                    val chainIdLong = if (chainIdString.startsWith("0x") || chainIdString.startsWith("0X")) {
+                        chainIdString.substring(2).toLong(16)
+                    } else {
+                        chainIdString.toLong()
+                    }
+                    Log.d("NitroMetamask", "getChainId: Returning chainId: $chainIdLong")
+                    Variant_NullType_Long.create(chainIdLong)
+                } catch (e: NumberFormatException) {
+                    Log.w("NitroMetamask", "Invalid chainId format: $chainIdString", e)
+                    Variant_NullType_Long.First(NullType.NULL)
+                }
             }
         }
     }
