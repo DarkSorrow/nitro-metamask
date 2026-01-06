@@ -1,7 +1,7 @@
 {
   "name": "@novastera-oss/nitro-metamask",
   "version": "0.1.0",
-  "description": "Novastera metamask authentication with native mobile libraries",
+  "description": "Native mobile MetaMask wallet integration for React Native. Part of Novastera CRM/ERP platform ecosystem. Provides secure authentication and message signing for Web3 mobile applications.",
   "main": "./lib/commonjs/index.js",
   "module": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
@@ -18,7 +18,20 @@
     "react-native",
     "@novastera-oss/nitro-metamask",
     "metamask",
-    "novastera"
+    "novastera",
+    "crm",
+    "erp",
+    "web3",
+    "blockchain",
+    "ethereum",
+    "wallet",
+    "mobile",
+    "ios",
+    "android",
+    "nitro-modules",
+    "authentication",
+    "crypto",
+    "defi"
   ],
   "files": [
     "src",

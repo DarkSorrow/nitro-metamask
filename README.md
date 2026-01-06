@@ -1,6 +1,6 @@
 # @novastera-oss/nitro-metamask
 
-Novastera authentication with native mobile libraries
+Novastera authentication with native mobile metamask libraries. Those aims at providing native mobile support for the metamask wallet.
 
 [![Version](https://img.shields.io/npm/v/@novastera-oss/nitro-metamask.svg)](https://www.npmjs.com/package/@novastera-oss/nitro-metamask)
 [![Downloads](https://img.shields.io/npm/dm/@novastera-oss/nitro-metamask.svg)](https://www.npmjs.com/package/@novastera-oss/nitro-metamask)
@@ -102,10 +102,10 @@ func application(
 ```typescript
 import { NitroMetamask } from '@novastera-oss/nitro-metamask';
 
-// Optional: Configure dapp URL (only needed if you have a website)
-// If not called, defaults to "https://novastera.com"
+// Optional: Configure dapp URL and deep link scheme
+// If not called, defaults to "https://novastera.com" and auto-detects deep link scheme
 // This URL is ONLY used for SDK validation - the deep link return is handled automatically
-NitroMetamask.configure('https://yourdomain.com'); // Optional
+NitroMetamask.configure('https://yourdomain.com', 'nitrometamask'); // Optional
 
 // Connect to MetaMask
 const connectResult = await NitroMetamask.connect();
@@ -115,10 +115,18 @@ console.log('Connected:', connectResult.address, 'Chain:', connectResult.chainId
 const signature = await NitroMetamask.signMessage('Hello from my app!');
 
 // Connect and sign in one call (convenience method)
-// This constructs a JSON message with address, chainID, nonce, and exp
+// This constructs a JSON message with nonce and exp, then signs it
+// Returns signature, address, and chainId together
 const nonce = 'random-nonce-123';
 const exp = BigInt(Date.now() + 42000); // 42 seconds from now (use BigInt for timestamp)
-const signature = await NitroMetamask.connectSign(nonce, exp);
+const result = await NitroMetamask.connectSign(nonce, exp);
+console.log('Signature:', result.signature);
+console.log('Address:', result.address);
+console.log('Chain ID:', result.chainId);
+
+// Get current address and chainId (useful if you need to check after other operations)
+const address = await NitroMetamask.getAddress();
+const chainId = await NitroMetamask.getChainId();
 ```
 
 ### How Deep Linking Works
@@ -133,20 +141,29 @@ const signature = await NitroMetamask.connectSign(nonce, exp);
    - If you don't have a website, the default works fine - it's just for validation
    - [Reference](https://raw.githubusercontent.com/MetaMask/metamask-android-sdk/a448378fbedc3afbf70759ba71294f7819af2f37/metamask-android-sdk/src/main/java/io/metamask/androidsdk/DappMetadata.kt)
 
-2. **Deep Link Return** (automatic):
+2. **Deep Link Return** (automatic or configurable):
    - Automatically detected from your `AndroidManifest.xml` intent filter
    - The SDK reads `<data android:scheme="..." android:host="mmsdk" />` and uses it to return to your app
+   - You can also explicitly provide the scheme via `configure()`: `NitroMetamask.configure('https://yourdomain.com', 'nitrometamask')`
    - This is what actually makes MetaMask return to your app after operations
-   - No configuration needed - it's handled automatically
+   - If not explicitly configured, the library will attempt to auto-detect it from your manifest
 
 **Summary:** 
 - The `configure()` URL is just for SDK validation (you can use the default if you don't have a website)
-- The deep link return is handled automatically via your `AndroidManifest.xml`
+- The deep link scheme can be auto-detected or explicitly provided via `configure()`
 - Your app will return correctly as long as the manifest is configured properly
 
-## Credits
+## About Novastera
 
-Bootstrapped with [create-nitro-module](https://github.com/patrickkabwe/create-nitro-module).
+[Novastera](https://novastera.com) is a modern CRM and ERP platform designed to streamline business operations and customer relationship management. This library is part of Novastera's open-source ecosystem, providing native mobile MetaMask wallet integration for React Native applications.
+
+**Key Features:**
+- Native mobile MetaMask wallet support for iOS and Android
+- Seamless deep linking integration
+- Secure authentication and message signing
+- Built with [Nitro Modules](https://nitro.margelo.com) for optimal performance
+
+Learn more at [novastera.com](https://novastera.com)
 
 ## Contributing
 
