@@ -76,3 +76,4 @@ android/keystores/debug.keystore
 lib/
 tsconfig.tsbuildinfo
 /nitrogen
+/metamask-android-sdk
