@@ -7,12 +7,12 @@ const withMetamaskAppDelegate = (config) => {
     // Check if AppDelegate is Swift
     if (modResults.language === 'swift') {
       // Check if the method already exists
-      if (modResults.contents.includes('MetaMaskSDK.shared.handleUrl')) {
+      if (modResults.contents.includes('MetaMaskSDK.sharedInstance?.handleUrl')) {
         return config;
       }
       
       // Add import if not present
-      if (!modResults.contents.includes('import MetaMaskSDK')) {
+      if (!modResults.contents.includes('import metamask_ios_sdk')) {
         // Find the last import statement and add after it
         const importRegex = /^import\s+.*$/gm;
         const imports = modResults.contents.match(importRegex);
@@ -21,14 +21,14 @@ const withMetamaskAppDelegate = (config) => {
           const lastImportIndex = modResults.contents.lastIndexOf(lastImport);
           modResults.contents = 
             modResults.contents.slice(0, lastImportIndex + lastImport.length) +
-            '\nimport MetaMaskSDK' +
+            '\nimport metamask_ios_sdk' +
             modResults.contents.slice(lastImportIndex + lastImport.length);
         } else {
           // No imports found, add at the top after the first line
           const firstLineIndex = modResults.contents.indexOf('\n');
           modResults.contents = 
             modResults.contents.slice(0, firstLineIndex + 1) +
-            'import MetaMaskSDK\n' +
+            'import metamask_ios_sdk\n' +
             modResults.contents.slice(firstLineIndex + 1);
         }
       }
@@ -47,7 +47,7 @@ const withMetamaskAppDelegate = (config) => {
     if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
        components.host == "mmsdk" {
       // Handle MetaMask deep link return
-      MetaMaskSDK.shared.handleUrl(url)
+      MetaMaskSDK.sharedInstance?.handleUrl(url)
       return true
     }
     

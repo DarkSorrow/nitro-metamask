@@ -2,7 +2,7 @@ import UIKit
 import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
-import MetaMaskSDK
+import metamask_ios_sdk
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -45,7 +45,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
        components.host == "mmsdk" {
       // Handle MetaMask deep link return
-      MetaMaskSDK.shared.handleUrl(url)
+      MetaMaskSDK.sharedInstance?.handleUrl(url)
       return true
     }
     
