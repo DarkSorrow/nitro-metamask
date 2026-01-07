@@ -1,6 +1,6 @@
 # @novastera-oss/nitro-metamask
 
-Novastera authentication with native mobile metamask libraries. Those aims at providing native mobile support for the metamask wallet.
+Native mobile MetaMask wallet integration for React Native. Part of Novastera's modern CRM and ERP platform ecosystem, designed for businesses that handle cryptocurrency and blockchain transactions.
 
 [![Version](https://img.shields.io/npm/v/@novastera-oss/nitro-metamask.svg)](https://www.npmjs.com/package/@novastera-oss/nitro-metamask)
 [![Downloads](https://img.shields.io/npm/dm/@novastera-oss/nitro-metamask.svg)](https://www.npmjs.com/package/@novastera-oss/nitro-metamask)
@@ -129,6 +129,14 @@ const address = await NitroMetamask.getAddress();
 const chainId = await NitroMetamask.getChainId();
 ```
 
+### Use Cases
+
+This library is ideal for:
+- **Crypto-friendly CRM/ERP systems** that need to authenticate users via MetaMask
+- **DeFi applications** requiring secure wallet connections
+- **NFT marketplaces** needing signature verification
+- **Web3 mobile apps** that integrate with blockchain networks
+
 ### How Deep Linking Works
 
 **Important:** The MetaMask SDK requires a valid HTTP/HTTPS URL for `DappMetadata.url` validation, but this is **separate** from the deep link that returns to your app.
@@ -155,15 +163,18 @@ const chainId = await NitroMetamask.getChainId();
 
 ## About Novastera
 
-[Novastera](https://novastera.com) is a modern CRM and ERP platform designed to streamline business operations and customer relationship management. This library is part of Novastera's open-source ecosystem, providing native mobile MetaMask wallet integration for React Native applications.
+[Novastera](https://novastera.com) is a modern CRM and ERP platform designed to streamline business operations and customer relationship management. Built for businesses operating in the Web3 space, Novastera provides comprehensive support for cryptocurrency transactions, blockchain integrations, and digital asset management.
+
+This library is part of Novastera's open-source ecosystem, providing native mobile MetaMask wallet integration for React Native applications. Whether you're building a DeFi application, NFT marketplace, or any Web3-enabled mobile app, this library provides the tools you need to integrate MetaMask wallet functionality seamlessly.
 
 **Key Features:**
 - Native mobile MetaMask wallet support for iOS and Android
 - Seamless deep linking integration
 - Secure authentication and message signing
 - Built with [Nitro Modules](https://nitro.margelo.com) for optimal performance
+- Crypto-friendly CRM and ERP platform integration
 
-Learn more at [novastera.com](https://novastera.com)
+Learn more about Novastera: [https://novastera.com/resources](https://novastera.com/resources)
 
 ## Contributing
 

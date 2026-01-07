@@ -424,10 +424,12 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
                                 is Result.Success.Item -> {
                                     val value = addressResult.value
                                     Log.d("NitroMetamask", "connectSign: addressResult.Item value type: ${value.javaClass.simpleName}, value: $value")
+                                    // Convert to String - value is Any? so we need to ensure it's a String
+                                    val valueStr = value as? String ?: value?.toString() ?: ""
                                     // Check if it's a JSON array string that needs parsing
-                                    if (value.startsWith("[") && value.endsWith("]")) {
+                                    if (valueStr.startsWith("[") && valueStr.endsWith("]")) {
                                         try {
-                                            val jsonArray = org.json.JSONArray(value)
+                                            val jsonArray = org.json.JSONArray(valueStr)
                                             val firstAddr = if (jsonArray.length() > 0) jsonArray.getString(0) else null
                                             if (firstAddr != null && firstAddr.isNotEmpty()) {
                                                 ethereum.updateAccount(firstAddr)
@@ -437,17 +439,17 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
                                         } catch (e: Exception) {
                                             Log.w("NitroMetamask", "connectSign: Failed to parse address array: ${e.message}")
                                             // If it's not a JSON array, treat it as a single address
-                                            if (value.isNotEmpty()) {
-                                                ethereum.updateAccount(value)
+                                            if (valueStr.isNotEmpty()) {
+                                                ethereum.updateAccount(valueStr)
                                             }
-                                            value
+                                            valueStr
                                         }
                                     } else {
                                         // Single address string
-                                        if (value.isNotEmpty()) {
-                                            ethereum.updateAccount(value)
+                                        if (valueStr.isNotEmpty()) {
+                                            ethereum.updateAccount(valueStr)
                                         }
-                                        value
+                                        valueStr
                                     }
                                 }
                                 is Result.Success.Items -> {
@@ -493,7 +495,11 @@ class HybridNitroMetamask : HybridNitroMetamaskSpec() {
                             
                             // Bring app back to foreground immediately after receiving signature
                             // This must be done on the main thread
-                            bringAppToForeground()
+                            try {
+                                bringAppToForeground()
+                            } catch (e: Exception) {
+                                Log.w("NitroMetamask", "connectSign: Failed to bring app to foreground: ${e.message}")
+                            }
                             
                             // Validate that we have all required values
                             if (address == null || address.isEmpty()) {
